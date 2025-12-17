@@ -112,7 +112,7 @@ def _get_timezone(site_config, installation_date):
             return tz
 
 
-def _download_energy_data(tesla, site_id, debug=False):
+def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False):
     site_config = tesla.api('SITE_CONFIG', path_vars={'site_id': site_id})['response']
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
@@ -123,14 +123,19 @@ def _download_energy_data(tesla, site_id, debug=False):
 
     # Beginning of the month.
     start_date = start_date - timedelta(days=start_date.day - 1)
+
+    # Determine effective oldest date
+    effective_oldest_date = oldest_date_override if oldest_date_override else installation_date
+
     if debug:
         print(f'Timezone: {timezone}')
         print(f'Start date: {start_date}')
+        print(f'Oldest date: {effective_oldest_date}')
 
     # The latest month will be partial.
     partial_month = True
 
-    while end_date > installation_date:
+    while end_date > effective_oldest_date:
         csv_name = _get_energy_csv_name(start_date, site_id)
         if partial_month or not os.path.exists(
             _get_energy_csv_name(start_date, site_id)
@@ -270,7 +275,7 @@ def _download_soe_day(tesla, site_id, timezone, date, partial_day=True):
         _write_soe_csv(response['time_series'], date, site_id, partial_day=partial_day)
 
 
-def _download_power_data(tesla, site_id, debug=False):
+def _download_power_data(tesla, site_id, oldest_date_override=None, debug=False):
     site_config = tesla.api('SITE_CONFIG', path_vars={'site_id': site_id})['response']
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
@@ -278,14 +283,19 @@ def _download_power_data(tesla, site_id, debug=False):
     date = datetime.now(pytz.timezone(timezone)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
+
+    # Determine effective oldest date
+    effective_oldest_date = oldest_date_override if oldest_date_override else installation_date
+
     if debug:
         print(f'Timezone: {timezone}')
         print(f'Start date: {date}')
+        print(f'Oldest date: {effective_oldest_date}')
 
     # The first day (today) will be partial.
     partial_day = True
 
-    while date > installation_date:
+    while date > effective_oldest_date:
         csv_name = _get_power_csv_name(date, site_id)
         if partial_day or not os.path.exists(csv_name):
             print(f'  {os.path.basename(csv_name)}')
@@ -328,7 +338,22 @@ def main():
         '--email', type=str, required=True, help='Tesla account email address'
     )
     parser.add_argument('--debug', action='store_true', help='Print debug info')
+    parser.add_argument(
+        '--oldest-date',
+        type=str,
+        help='Oldest date to fetch data from (YYYY-MM-DD format). Defaults to installation date.'
+    )
     args = parser.parse_args()
+
+    # Parse oldest_date if provided
+    oldest_date_override = None
+    if args.oldest_date:
+        try:
+            oldest_date_override = parse(args.oldest_date)
+        except Exception as e:
+            print(f"Error: Invalid date format for --oldest-date: {args.oldest_date}")
+            print("Expected format: YYYY-MM-DD")
+            return
 
     tesla = teslapy.Tesla(args.email, retry=2, timeout=10)
     if not tesla.authorized:
@@ -352,7 +377,7 @@ def main():
             )
             try:
                 _delete_partial_energy_files(site_id)
-                _download_energy_data(tesla, site_id, debug=args.debug)
+                _download_energy_data(tesla, site_id, oldest_date_override=oldest_date_override, debug=args.debug)
             except Exception:
                 traceback.print_exc()
             print()
@@ -363,7 +388,7 @@ def main():
             try:
                 _delete_partial_power_files(site_id)
                 _delete_partial_soe_files(site_id)
-                _download_power_data(tesla, site_id, debug=args.debug)
+                _download_power_data(tesla, site_id, oldest_date_override=oldest_date_override, debug=args.debug)
             except Exception:
                 traceback.print_exc()
 
