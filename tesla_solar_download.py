@@ -117,6 +117,8 @@ def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
 
+    print(f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}')
+
     now = datetime.now(pytz.timezone(timezone)).replace(microsecond=0)
     start_date = now.replace(hour=0, minute=0, second=0)
     end_date = now.replace(hour=23, minute=59, second=59)
@@ -125,12 +127,19 @@ def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False
     start_date = start_date - timedelta(days=start_date.day - 1)
 
     # Determine effective oldest date
-    effective_oldest_date = oldest_date_override if oldest_date_override else installation_date
+    if oldest_date_override:
+        # Make the override timezone-aware by localizing to the site's timezone
+        effective_oldest_date = pytz.timezone(timezone).localize(
+            oldest_date_override.replace(hour=0, minute=0, second=0, tzinfo=None)
+        )
+        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)')
+    else:
+        effective_oldest_date = installation_date
+        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)')
 
     if debug:
         print(f'Timezone: {timezone}')
         print(f'Start date: {start_date}')
-        print(f'Oldest date: {effective_oldest_date}')
 
     # The latest month will be partial.
     partial_month = True
@@ -280,17 +289,26 @@ def _download_power_data(tesla, site_id, oldest_date_override=None, debug=False)
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
 
+    print(f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}')
+
     date = datetime.now(pytz.timezone(timezone)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
     # Determine effective oldest date
-    effective_oldest_date = oldest_date_override if oldest_date_override else installation_date
+    if oldest_date_override:
+        # Make the override timezone-aware by localizing to the site's timezone
+        effective_oldest_date = pytz.timezone(timezone).localize(
+            oldest_date_override.replace(hour=0, minute=0, second=0, tzinfo=None)
+        )
+        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)')
+    else:
+        effective_oldest_date = installation_date
+        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)')
 
     if debug:
         print(f'Timezone: {timezone}')
         print(f'Start date: {date}')
-        print(f'Oldest date: {effective_oldest_date}')
 
     # The first day (today) will be partial.
     partial_day = True
