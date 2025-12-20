@@ -51,6 +51,173 @@ to delays used to slow down the rate of API requests.  You may interrupt and res
 Energy downloads are faster (less than 30s per year).
 
 
+## Configuration Options
+
+The script supports several command-line arguments for customization:
+
+### Basic Options
+- `--email`: (Required) Your Tesla account email address
+- `--debug`: Enable debug output (timezone and date information)
+- `--oldest-date`: Limit how far back to fetch data (YYYY-MM-DD format). Default: installation date
+
+### Advanced Options
+- `--output-dir`: Custom directory for downloaded CSV files. Default: `download`
+- `--log-file`: Path to JSON log file for structured logging. Optional.
+- `--non-interactive`: Exit with error code 2 if authentication required (for cron jobs)
+
+### Examples
+
+**Basic usage:**
+```bash
+python3 ./tesla_solar_download.py --email my_email@gmail.com
+```
+
+**Custom output directory:**
+```bash
+python3 ./tesla_solar_download.py --email my_email@gmail.com --output-dir /data/tesla
+```
+
+**With structured JSON logging:**
+```bash
+python3 ./tesla_solar_download.py --email my_email@gmail.com --log-file logs/download.jsonl
+```
+
+**For cron jobs (non-interactive mode):**
+```bash
+python3 ./tesla_solar_download.py --email my_email@gmail.com --non-interactive --log-file /var/log/tesla.jsonl
+```
+
+**Fetch only recent data:**
+```bash
+python3 ./tesla_solar_download.py --email my_email@gmail.com --oldest-date 2025-01-01
+```
+
+
+## Structured Logging
+
+When you specify `--log-file`, the script writes detailed JSON logs that can be parsed and analyzed programmatically. This is especially useful for:
+- Monitoring automated/cron downloads
+- Debugging issues
+- Tracking download statistics
+- Web app integration
+
+### Log Format
+
+Each line in the log file is a JSON object with these common fields:
+- `timestamp`: ISO 8601 timestamp with timezone
+- `level`: Log level (INFO, WARNING, ERROR, DEBUG)
+- `message`: Human-readable message
+- `operation`: Type of operation being performed
+- Additional context-specific fields
+
+Example log entry:
+```json
+{
+  "timestamp": "2025-12-20T10:30:45.123Z",
+  "level": "INFO",
+  "message": "download_energy_month completed",
+  "operation": "download_energy_month",
+  "site_id": "***1234",
+  "date": "2025-12",
+  "duration_ms": 1234,
+  "records": 31,
+  "file": "download/12345/energy/2025-12.csv",
+  "status": "success"
+}
+```
+
+### Parsing Logs
+
+Use the included `parse_logs.py` script to analyze log files:
+
+```bash
+python3 parse_logs.py logs/download-20251220.jsonl
+```
+
+This will display:
+- Success/failure statistics
+- Download counts by type (energy, power, soe)
+- Authentication token status
+- Error summaries
+- Total duration
+
+For complete log format documentation, see [LOG_FORMAT.md](LOG_FORMAT.md).
+
+
+## Token Management
+
+### How Authentication Works
+
+The script uses OAuth2 to authenticate with Tesla's API:
+1. First run: You'll be prompted to log in via your web browser
+2. After login, an authentication token is saved to `cache.json`
+3. Subsequent runs: The token is loaded automatically (no login needed)
+4. Token refresh: Access tokens expire after 8 hours but are automatically refreshed
+
+### Token Storage
+
+Authentication tokens are stored in `cache.json` in the project directory with:
+- **Access token**: Short-lived (8 hours), used for API requests
+- **Refresh token**: Long-lived (weeks/months), used to obtain new access tokens
+- **Expiration timestamp**: When the access token expires
+
+**Important:** Keep `cache.json` secure! Anyone with this file can access your Tesla account data.
+
+### Token Expiration & Renewal
+
+The refresh token allows unattended operation for weeks or months. However, if the refresh token expires:
+1. The script will detect authentication failure
+2. In interactive mode: You'll be prompted to log in again
+3. In `--non-interactive` mode: Script exits with code 2
+
+### Renewing Tokens for Cron Jobs
+
+When running as a cron job, if authentication fails:
+
+1. **Detect the failure**: Check cron job exit code (exit code 2 = auth needed)
+2. **Run locally**: Execute the script on your local machine:
+   ```bash
+   python3 tesla_solar_download.py --email your_email@example.com
+   ```
+3. **Complete browser login**: Follow the interactive prompts
+4. **Upload new token**: Copy the updated `cache.json` to your server
+5. **Resume cron**: Next scheduled run will succeed with fresh tokens
+
+For SolarTracker integration, you can upload `cache.json` via the web UI file manager.
+
+
+## Integration with SolarTracker
+
+This script is designed to work seamlessly with the SolarTracker web application.
+
+### Cron Job Setup
+
+Add to your crontab for automatic daily downloads:
+```bash
+# Run Tesla download daily at 2 AM
+0 2 * * * cd /path/to/tesla-solar-download && python3 tesla_solar_download.py --email your@email.com --output-dir /data/solar/tesla --log-file /var/log/tesla-$(date +\%Y\%m\%d).jsonl --non-interactive
+```
+
+### Monitoring Downloads
+
+The SolarTracker web app can:
+1. Parse JSON logs using `parse_logs.py` to display download statistics
+2. Monitor for authentication failures (exit code 2)
+3. Alert admins when token renewal is needed
+4. Provide UI for uploading renewed `cache.json`
+
+### Log Analysis
+
+Your web app can parse the JSON logs to extract:
+- Last successful download time
+- Files downloaded per day/month
+- API errors and warnings
+- Token expiration countdown
+- Download performance metrics
+
+See `parse_logs.py` for a reference implementation of log parsing.
+
+
 ## Data
 
 Power data is formatted as follows:

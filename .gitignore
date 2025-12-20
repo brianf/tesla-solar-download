@@ -2,5 +2,8 @@ cache.json
 download
 venv
 var
+logs
 .DS_Store
 run.sh
+*.jsonl
+__pycache__

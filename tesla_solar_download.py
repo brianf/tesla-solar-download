@@ -45,10 +45,21 @@ def _remove_excluded_columns(timeseries):
             del timeseries[col]
 
 
-def _get_energy_csv_name(date, site_id, partial_month=False):
+def _get_energy_csv_name(date, site_id, output_dir='download', partial_month=False):
+    """Generate energy CSV file path.
+
+    Args:
+        date: Date for the file
+        site_id: Tesla site ID
+        output_dir: Base output directory (default: 'download')
+        partial_month: Whether file is partial month
+
+    Returns:
+        str: Path like {output_dir}/{site_id}/energy/{YYYY-MM}.csv
+    """
     str_date = date.strftime('%Y-%m')
     suffix = '.partial.csv' if partial_month else '.csv'
-    return f'download/{site_id}/energy/{str_date}{suffix}'
+    return os.path.join(output_dir, str(site_id), 'energy', f'{str_date}{suffix}')
 
 
 def _get_fieldnames_from_series(timeseries):
@@ -59,11 +70,11 @@ def _get_fieldnames_from_series(timeseries):
     return list(keys.keys())
 
 
-def _write_energy_csv(timeseries, date, site_id, partial_month=False):
+def _write_energy_csv(timeseries, date, site_id, output_dir='download', partial_month=False):
     if not timeseries:
         raise ValueError('No timeseries')
 
-    csv_filename = _get_energy_csv_name(date, site_id, partial_month=partial_month)
+    csv_filename = _get_energy_csv_name(date, site_id, output_dir=output_dir, partial_month=partial_month)
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
     fieldnames = _get_fieldnames_from_series(timeseries)
     fieldnames = [n for n in fieldnames if n not in EXCLUDED_COLUMNS]
@@ -78,7 +89,7 @@ def _write_energy_csv(timeseries, date, site_id, partial_month=False):
 
 @retry(tries=2, delay=5)
 def _download_energy_month(
-    tesla, site_id, timezone, start_date, end_date, partial_month=False
+    tesla, site_id, timezone, start_date, end_date, output_dir='download', partial_month=False
 ):
     response = tesla.api(
         'CALENDAR_HISTORY_DATA',
@@ -93,7 +104,7 @@ def _download_energy_month(
     if not response or 'time_series' not in response:
         raise ValueError(f'No timeseries for {start_date}')
     _write_energy_csv(
-        response['time_series'], start_date, site_id, partial_month=partial_month
+        response['time_series'], start_date, site_id, output_dir=output_dir, partial_month=partial_month
     )
 
 
@@ -112,7 +123,7 @@ def _get_timezone(site_config, installation_date):
             return tz
 
 
-def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False):
+def _download_energy_data(tesla, site_id, output_dir='download', oldest_date_override=None, debug=False):
     site_config = tesla.api('SITE_CONFIG', path_vars={'site_id': site_id})['response']
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
@@ -145,9 +156,9 @@ def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False
     partial_month = True
 
     while end_date > effective_oldest_date:
-        csv_name = _get_energy_csv_name(start_date, site_id)
+        csv_name = _get_energy_csv_name(start_date, site_id, output_dir=output_dir)
         if partial_month or not os.path.exists(
-            _get_energy_csv_name(start_date, site_id)
+            _get_energy_csv_name(start_date, site_id, output_dir=output_dir)
         ):
             print(f'  {os.path.basename(csv_name)}')
             try:
@@ -157,6 +168,7 @@ def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False
                     timezone,
                     start_date,
                     end_date,
+                    output_dir=output_dir,
                     partial_month=partial_month,
                 )
             except Exception:
@@ -170,8 +182,8 @@ def _download_energy_data(tesla, site_id, oldest_date_override=None, debug=False
         start_date = pytz.timezone(timezone).localize(start_date.replace(tzinfo=None))
 
 
-def _delete_partial_energy_files(site_id):
-    dir = os.path.join('download', str(site_id), 'energy')
+def _delete_partial_energy_files(site_id, output_dir='download'):
+    dir = os.path.join(output_dir, str(site_id), 'energy')
     if not os.path.exists(dir):
         return
     for fname in os.listdir(dir):
@@ -179,23 +191,45 @@ def _delete_partial_energy_files(site_id):
             os.remove(os.path.join(dir, fname))
 
 
-def _get_power_csv_name(date, site_id, partial_day=False):
+def _get_power_csv_name(date, site_id, output_dir='download', partial_day=False):
+    """Generate power CSV file path.
+
+    Args:
+        date: Date for the file
+        site_id: Tesla site ID
+        output_dir: Base output directory (default: 'download')
+        partial_day: Whether file is partial day
+
+    Returns:
+        str: Path like {output_dir}/{site_id}/power/{YYYY-MM-DD}.csv
+    """
     str_date = date.strftime('%Y-%m-%d')
     suffix = '.partial.csv' if partial_day else '.csv'
-    return f'download/{site_id}/power/{str_date}{suffix}'
+    return os.path.join(output_dir, str(site_id), 'power', f'{str_date}{suffix}')
 
 
-def _get_soe_csv_name(date, site_id, partial_day=False):
+def _get_soe_csv_name(date, site_id, output_dir='download', partial_day=False):
+    """Generate state of charge (SOE) CSV file path.
+
+    Args:
+        date: Date for the file
+        site_id: Tesla site ID
+        output_dir: Base output directory (default: 'download')
+        partial_day: Whether file is partial day
+
+    Returns:
+        str: Path like {output_dir}/{site_id}/soe/{YYYY-MM-DD}.csv
+    """
     str_date = date.strftime('%Y-%m-%d')
     suffix = '.partial.csv' if partial_day else '.csv'
-    return f'download/{site_id}/soe/{str_date}{suffix}'
+    return os.path.join(output_dir, str(site_id), 'soe', f'{str_date}{suffix}')
 
 
-def _write_power_csv(timeseries, date, site_id, partial_day=False):
+def _write_power_csv(timeseries, date, site_id, output_dir='download', partial_day=False):
     if not timeseries:
         raise ValueError(f'No timeseries for {date}')
 
-    csv_filename = _get_power_csv_name(date, site_id, partial_day=partial_day)
+    csv_filename = _get_power_csv_name(date, site_id, output_dir=output_dir, partial_day=partial_day)
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
     fieldnames = _get_fieldnames_from_series(timeseries) + ['load_power']
     fieldnames = [n for n in fieldnames if n not in EXCLUDED_COLUMNS]
@@ -214,11 +248,11 @@ def _write_power_csv(timeseries, date, site_id, partial_day=False):
             writer.writerow(ts)
 
 
-def _write_soe_csv(timeseries, date, site_id, partial_day=False):
+def _write_soe_csv(timeseries, date, site_id, output_dir='download', partial_day=False):
     if not timeseries:
         raise ValueError(f'No timeseries for {date}')
 
-    csv_filename = _get_soe_csv_name(date, site_id, partial_day=partial_day)
+    csv_filename = _get_soe_csv_name(date, site_id, output_dir=output_dir, partial_day=partial_day)
     os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
     fieldnames = _get_fieldnames_from_series(timeseries)
     fieldnames = [n for n in fieldnames if n not in EXCLUDED_COLUMNS]
@@ -232,7 +266,7 @@ def _write_soe_csv(timeseries, date, site_id, partial_day=False):
 
 
 @retry(tries=2, delay=5)
-def _download_power_day(tesla, site_id, timezone, date, partial_day=True):
+def _download_power_day(tesla, site_id, timezone, date, output_dir='download', partial_day=True):
     start_date = (
         pytz.timezone(timezone)
         .localize(date.replace(hour=0, minute=0, second=0, tzinfo=None))
@@ -255,11 +289,11 @@ def _download_power_day(tesla, site_id, timezone, date, partial_day=True):
 
     if not response or 'time_series' not in response:
         raise ValueError(f'No timeseries for {date}')
-    _write_power_csv(response['time_series'], date, site_id, partial_day=partial_day)
+    _write_power_csv(response['time_series'], date, site_id, output_dir=output_dir, partial_day=partial_day)
 
 
 @retry(tries=2, delay=5)
-def _download_soe_day(tesla, site_id, timezone, date, partial_day=True):
+def _download_soe_day(tesla, site_id, timezone, date, output_dir='download', partial_day=True):
     start_date = (
         pytz.timezone(timezone)
         .localize(date.replace(hour=0, minute=0, second=0, tzinfo=None))
@@ -281,10 +315,10 @@ def _download_soe_day(tesla, site_id, timezone, date, partial_day=True):
     )['response']
 
     if response and 'time_series' in response:
-        _write_soe_csv(response['time_series'], date, site_id, partial_day=partial_day)
+        _write_soe_csv(response['time_series'], date, site_id, output_dir=output_dir, partial_day=partial_day)
 
 
-def _download_power_data(tesla, site_id, oldest_date_override=None, debug=False):
+def _download_power_data(tesla, site_id, output_dir='download', oldest_date_override=None, debug=False):
     site_config = tesla.api('SITE_CONFIG', path_vars={'site_id': site_id})['response']
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
@@ -314,12 +348,12 @@ def _download_power_data(tesla, site_id, oldest_date_override=None, debug=False)
     partial_day = True
 
     while date > effective_oldest_date:
-        csv_name = _get_power_csv_name(date, site_id)
+        csv_name = _get_power_csv_name(date, site_id, output_dir=output_dir)
         if partial_day or not os.path.exists(csv_name):
             print(f'  {os.path.basename(csv_name)}')
             try:
-                _download_power_day(tesla, site_id, timezone, date, partial_day=partial_day)
-                _download_soe_day(tesla, site_id, timezone, date, partial_day=partial_day)
+                _download_power_day(tesla, site_id, timezone, date, output_dir=output_dir, partial_day=partial_day)
+                _download_soe_day(tesla, site_id, timezone, date, output_dir=output_dir, partial_day=partial_day)
             except Exception:
                 traceback.print_exc()
             time.sleep(1)
@@ -330,8 +364,8 @@ def _download_power_data(tesla, site_id, oldest_date_override=None, debug=False)
         date = pytz.timezone(timezone).localize(date.replace(tzinfo=None))
 
 
-def _delete_partial_power_files(site_id):
-    dir = os.path.join('download', str(site_id), 'power')
+def _delete_partial_power_files(site_id, output_dir='download'):
+    dir = os.path.join(output_dir, str(site_id), 'power')
     if not os.path.exists(dir):
         return
     for fname in os.listdir(dir):
@@ -339,8 +373,8 @@ def _delete_partial_power_files(site_id):
             os.remove(os.path.join(dir, fname))
 
 
-def _delete_partial_soe_files(site_id):
-    dir = os.path.join('download', str(site_id), 'soe')
+def _delete_partial_soe_files(site_id, output_dir='download'):
+    dir = os.path.join(output_dir, str(site_id), 'soe')
     if not os.path.exists(dir):
         return
     for fname in os.listdir(dir):
@@ -355,6 +389,23 @@ def main():
     parser.add_argument(
         '--email', type=str, required=True, help='Tesla account email address'
     )
+    parser.add_argument(
+        '--output-dir',
+        type=str,
+        default='download',
+        help='Base directory for downloaded files (default: download)'
+    )
+    parser.add_argument(
+        '--log-file',
+        type=str,
+        default=None,
+        help='Path to JSON log file (optional, enables structured logging)'
+    )
+    parser.add_argument(
+        '--non-interactive',
+        action='store_true',
+        help='Exit with error if auth required (for cron jobs)'
+    )
     parser.add_argument('--debug', action='store_true', help='Print debug info')
     parser.add_argument(
         '--oldest-date',
@@ -362,6 +413,27 @@ def main():
         help='Oldest date to fetch data from (YYYY-MM-DD format). Defaults to installation date.'
     )
     args = parser.parse_args()
+
+    # Initialize structured logging
+    import logging
+    from structured_logger import setup_logging
+
+    setup_logging(
+        log_file=args.log_file,
+        console_level=logging.DEBUG if args.debug else logging.INFO
+    )
+    logger = logging.getLogger(__name__)
+
+    logger.info("Tesla Solar Download starting", extra={
+        'operation': 'startup',
+        'email': args.email,
+        'output_dir': args.output_dir,
+        'log_file': args.log_file or 'console_only',
+        'non_interactive': args.non_interactive
+    })
+
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Parse oldest_date if provided
     oldest_date_override = None
@@ -375,8 +447,24 @@ def main():
 
     tesla = teslapy.Tesla(args.email, retry=2, timeout=10)
     if not tesla.authorized:
+        auth_url = tesla.authorization_url()
+
+        if args.non_interactive:
+            logger.error(
+                "Authentication required - not authorized",
+                extra={
+                    'operation': 'auth_required',
+                    'auth_url': auth_url,
+                    'cache_file': 'cache.json',
+                    'instructions': 'Run script locally to authenticate, then upload cache.json'
+                }
+            )
+            import sys
+            sys.exit(2)  # Exit code 2 = auth failure
+
+        # Interactive auth
         print('STEP 1: Log in to Tesla.  Open this page in your browser:\n')
-        print(tesla.authorization_url())
+        print(auth_url)
         print()
         print(
             'After successful login, you will get a Page Not Found error.  That\'s expected.'
@@ -385,28 +473,41 @@ def main():
         tesla.fetch_token(authorization_response=input('URL after authentication: '))
         print('\nSuccess!')
 
+    # Log token status
+    if tesla.authorized:
+        logger.info(
+            "Authenticated successfully",
+            extra={
+                'operation': 'auth_status',
+                'expires_at': tesla.expires_at,
+                'expires_at_human': time.ctime(tesla.expires_at),
+                'time_until_expiry_hours': (tesla.expires_at - time.time()) / 3600,
+                'cache_file': 'cache.json'
+            }
+        )
+
     for product in tesla.api('PRODUCT_LIST')['response']:
         resource_type = product.get('resource_type')
         if resource_type in ('battery', 'solar'):
             site_id = product['energy_site_id']
             obfuscated_site_it = f'***{str(site_id)[-4:]}'
             print(
-                f'Downloading energy data for {resource_type} site {obfuscated_site_it} to download/energy/'
+                f'Downloading energy data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/energy/'
             )
             try:
-                _delete_partial_energy_files(site_id)
-                _download_energy_data(tesla, site_id, oldest_date_override=oldest_date_override, debug=args.debug)
+                _delete_partial_energy_files(site_id, output_dir=args.output_dir)
+                _download_energy_data(tesla, site_id, output_dir=args.output_dir, oldest_date_override=oldest_date_override, debug=args.debug)
             except Exception:
                 traceback.print_exc()
             print()
 
             print(
-                f'Downloading power data for {resource_type} site {obfuscated_site_it} to download/power/'
+                f'Downloading power data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/power/'
             )
             try:
-                _delete_partial_power_files(site_id)
-                _delete_partial_soe_files(site_id)
-                _download_power_data(tesla, site_id, oldest_date_override=oldest_date_override, debug=args.debug)
+                _delete_partial_power_files(site_id, output_dir=args.output_dir)
+                _delete_partial_soe_files(site_id, output_dir=args.output_dir)
+                _download_power_data(tesla, site_id, output_dir=args.output_dir, oldest_date_override=oldest_date_override, debug=args.debug)
             except Exception:
                 traceback.print_exc()
 
