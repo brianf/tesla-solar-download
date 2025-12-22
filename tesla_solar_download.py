@@ -16,6 +16,7 @@ limitations under the License.
 
 import argparse
 import csv
+import logging
 import os
 import time
 import traceback
@@ -25,6 +26,8 @@ import pytz
 import teslapy
 from dateutil.parser import parse
 from retry import retry
+
+logger = logging.getLogger(__name__)
 
 # Exclude columns that are not relevant (and generally not set).
 EXCLUDED_COLUMNS = (
@@ -128,7 +131,15 @@ def _download_energy_data(tesla, site_id, output_dir='download', oldest_date_ove
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
 
-    print(f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}')
+    logger.info(
+        f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}',
+        extra={
+            'operation': 'date_info',
+            'date_type': 'installation',
+            'date': installation_date.strftime("%Y-%m-%d"),
+            'data_type': 'energy'
+        }
+    )
 
     now = datetime.now(pytz.timezone(timezone)).replace(microsecond=0)
     start_date = now.replace(hour=0, minute=0, second=0)
@@ -143,14 +154,46 @@ def _download_energy_data(tesla, site_id, output_dir='download', oldest_date_ove
         effective_oldest_date = pytz.timezone(timezone).localize(
             oldest_date_override.replace(hour=0, minute=0, second=0, tzinfo=None)
         )
-        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)')
+        logger.info(
+            f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)',
+            extra={
+                'operation': 'date_info',
+                'date_type': 'oldest',
+                'date': effective_oldest_date.strftime("%Y-%m-%d"),
+                'source': 'parameter',
+                'data_type': 'energy'
+            }
+        )
     else:
         effective_oldest_date = installation_date
-        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)')
+        logger.info(
+            f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)',
+            extra={
+                'operation': 'date_info',
+                'date_type': 'oldest',
+                'date': effective_oldest_date.strftime("%Y-%m-%d"),
+                'source': 'installation',
+                'data_type': 'energy'
+            }
+        )
 
     if debug:
-        print(f'Timezone: {timezone}')
-        print(f'Start date: {start_date}')
+        logger.debug(
+            f'Timezone: {timezone}',
+            extra={
+                'operation': 'debug_info',
+                'timezone': timezone,
+                'data_type': 'energy'
+            }
+        )
+        logger.debug(
+            f'Start date: {start_date}',
+            extra={
+                'operation': 'debug_info',
+                'start_date': str(start_date),
+                'data_type': 'energy'
+            }
+        )
 
     # The latest month will be partial.
     partial_month = True
@@ -160,7 +203,15 @@ def _download_energy_data(tesla, site_id, output_dir='download', oldest_date_ove
         if partial_month or not os.path.exists(
             _get_energy_csv_name(start_date, site_id, output_dir=output_dir)
         ):
-            print(f'  {os.path.basename(csv_name)}')
+            logger.info(
+                f'  {os.path.basename(csv_name)}',
+                extra={
+                    'operation': 'file_download',
+                    'csv_filename': os.path.basename(csv_name),
+                    'data_type': 'energy',
+                    'period': start_date.strftime("%Y-%m")
+                }
+            )
             try:
                 _download_energy_month(
                     tesla,
@@ -323,7 +374,15 @@ def _download_power_data(tesla, site_id, output_dir='download', oldest_date_over
     installation_date = parse(site_config['installation_date'])
     timezone = _get_timezone(site_config, installation_date)
 
-    print(f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}')
+    logger.info(
+        f'  Installation date from API: {installation_date.strftime("%Y-%m-%d")}',
+        extra={
+            'operation': 'date_info',
+            'date_type': 'installation',
+            'date': installation_date.strftime("%Y-%m-%d"),
+            'data_type': 'power'
+        }
+    )
 
     date = datetime.now(pytz.timezone(timezone)).replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -335,14 +394,46 @@ def _download_power_data(tesla, site_id, output_dir='download', oldest_date_over
         effective_oldest_date = pytz.timezone(timezone).localize(
             oldest_date_override.replace(hour=0, minute=0, second=0, tzinfo=None)
         )
-        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)')
+        logger.info(
+            f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from --oldest-date parameter)',
+            extra={
+                'operation': 'date_info',
+                'date_type': 'oldest',
+                'date': effective_oldest_date.strftime("%Y-%m-%d"),
+                'source': 'parameter',
+                'data_type': 'power'
+            }
+        )
     else:
         effective_oldest_date = installation_date
-        print(f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)')
+        logger.info(
+            f'  Using oldest date: {effective_oldest_date.strftime("%Y-%m-%d")} (from installation date)',
+            extra={
+                'operation': 'date_info',
+                'date_type': 'oldest',
+                'date': effective_oldest_date.strftime("%Y-%m-%d"),
+                'source': 'installation',
+                'data_type': 'power'
+            }
+        )
 
     if debug:
-        print(f'Timezone: {timezone}')
-        print(f'Start date: {date}')
+        logger.debug(
+            f'Timezone: {timezone}',
+            extra={
+                'operation': 'debug_info',
+                'timezone': timezone,
+                'data_type': 'power'
+            }
+        )
+        logger.debug(
+            f'Start date: {date}',
+            extra={
+                'operation': 'debug_info',
+                'start_date': str(date),
+                'data_type': 'power'
+            }
+        )
 
     # The first day (today) will be partial.
     partial_day = True
@@ -350,7 +441,15 @@ def _download_power_data(tesla, site_id, output_dir='download', oldest_date_over
     while date > effective_oldest_date:
         csv_name = _get_power_csv_name(date, site_id, output_dir=output_dir)
         if partial_day or not os.path.exists(csv_name):
-            print(f'  {os.path.basename(csv_name)}')
+            logger.info(
+                f'  {os.path.basename(csv_name)}',
+                extra={
+                    'operation': 'file_download',
+                    'csv_filename': os.path.basename(csv_name),
+                    'data_type': 'power',
+                    'period': date.strftime("%Y-%m-%d")
+                }
+            )
             try:
                 _download_power_day(tesla, site_id, timezone, date, output_dir=output_dir, partial_day=partial_day)
                 _download_soe_day(tesla, site_id, timezone, date, output_dir=output_dir, partial_day=partial_day)
@@ -441,8 +540,21 @@ def main():
         try:
             oldest_date_override = parse(args.oldest_date)
         except Exception as e:
-            print(f"Error: Invalid date format for --oldest-date: {args.oldest_date}")
-            print("Expected format: YYYY-MM-DD")
+            logger.error(
+                f"Error: Invalid date format for --oldest-date: {args.oldest_date}",
+                extra={
+                    'operation': 'validation_error',
+                    'error_type': 'invalid_date',
+                    'provided_value': args.oldest_date
+                }
+            )
+            logger.error(
+                "Expected format: YYYY-MM-DD",
+                extra={
+                    'operation': 'validation_error',
+                    'error_type': 'invalid_date'
+                }
+            )
             return
 
     tesla = teslapy.Tesla(args.email, retry=2, timeout=10)
@@ -463,15 +575,47 @@ def main():
             sys.exit(2)  # Exit code 2 = auth failure
 
         # Interactive auth
-        print('STEP 1: Log in to Tesla.  Open this page in your browser:\n')
-        print(auth_url)
-        print()
-        print(
-            'After successful login, you will get a Page Not Found error.  That\'s expected.'
+        logger.info(
+            'STEP 1: Log in to Tesla.  Open this page in your browser:\n',
+            extra={
+                'operation': 'auth_prompt',
+                'step': 1,
+                'message': 'Log in to Tesla'
+            }
         )
-        print('Just copy the url of that page and paste it here:')
+        logger.info(
+            auth_url,
+            extra={
+                'operation': 'auth_prompt',
+                'auth_url': auth_url
+            }
+        )
+        logger.info(
+            '',
+            extra={'operation': 'auth_prompt'}
+        )
+        logger.info(
+            'After successful login, you will get a Page Not Found error.  That\'s expected.',
+            extra={
+                'operation': 'auth_prompt',
+                'message': 'Page Not Found is expected'
+            }
+        )
+        logger.info(
+            'Just copy the url of that page and paste it here:',
+            extra={
+                'operation': 'auth_prompt',
+                'message': 'Paste URL here'
+            }
+        )
         tesla.fetch_token(authorization_response=input('URL after authentication: '))
-        print('\nSuccess!')
+        logger.info(
+            '\nSuccess!',
+            extra={
+                'operation': 'auth_prompt',
+                'message': 'Authentication successful'
+            }
+        )
 
     # Log token status
     if tesla.authorized:
@@ -491,18 +635,35 @@ def main():
         if resource_type in ('battery', 'solar'):
             site_id = product['energy_site_id']
             obfuscated_site_it = f'***{str(site_id)[-4:]}'
-            print(
-                f'Downloading energy data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/energy/'
+            logger.info(
+                f'Downloading energy data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/energy/',
+                extra={
+                    'operation': 'download_start',
+                    'data_type': 'energy',
+                    'resource_type': resource_type,
+                    'site_id': obfuscated_site_it,
+                    'output_dir': f'{args.output_dir}/energy/'
+                }
             )
             try:
                 _delete_partial_energy_files(site_id, output_dir=args.output_dir)
                 _download_energy_data(tesla, site_id, output_dir=args.output_dir, oldest_date_override=oldest_date_override, debug=args.debug)
             except Exception:
                 traceback.print_exc()
-            print()
+            logger.info(
+                '',
+                extra={'operation': 'separator'}
+            )
 
-            print(
-                f'Downloading power data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/power/'
+            logger.info(
+                f'Downloading power data for {resource_type} site {obfuscated_site_it} to {args.output_dir}/power/',
+                extra={
+                    'operation': 'download_start',
+                    'data_type': 'power',
+                    'resource_type': resource_type,
+                    'site_id': obfuscated_site_it,
+                    'output_dir': f'{args.output_dir}/power/'
+                }
             )
             try:
                 _delete_partial_power_files(site_id, output_dir=args.output_dir)
