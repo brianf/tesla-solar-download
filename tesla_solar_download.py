@@ -580,7 +580,7 @@ def main():
             extra={
                 'operation': 'auth_prompt',
                 'step': 1,
-                'message': 'Log in to Tesla'
+                'prompt_text': 'Log in to Tesla'
             }
         )
         logger.info(
@@ -598,14 +598,14 @@ def main():
             'After successful login, you will get a Page Not Found error.  That\'s expected.',
             extra={
                 'operation': 'auth_prompt',
-                'message': 'Page Not Found is expected'
+                'prompt_text': 'Page Not Found is expected'
             }
         )
         logger.info(
             'Just copy the url of that page and paste it here:',
             extra={
                 'operation': 'auth_prompt',
-                'message': 'Paste URL here'
+                'prompt_text': 'Paste URL here'
             }
         )
         tesla.fetch_token(authorization_response=input('URL after authentication: '))
@@ -613,7 +613,7 @@ def main():
             '\nSuccess!',
             extra={
                 'operation': 'auth_prompt',
-                'message': 'Authentication successful'
+                'prompt_text': 'Authentication successful'
             }
         )
 
