@@ -511,6 +511,12 @@ def main():
         type=str,
         help='Oldest date to fetch data from (YYYY-MM-DD format). Defaults to installation date.'
     )
+    parser.add_argument(
+        '--timeout',
+        type=int,
+        default=10,
+        help='API request timeout in seconds (default: 10). Increase for slow connections.'
+    )
     args = parser.parse_args()
 
     # Initialize structured logging
@@ -557,7 +563,7 @@ def main():
             )
             return
 
-    tesla = teslapy.Tesla(args.email, retry=2, timeout=10)
+    tesla = teslapy.Tesla(args.email, retry=2, timeout=args.timeout)
     if not tesla.authorized:
         auth_url = tesla.authorization_url()
 
