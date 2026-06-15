@@ -566,6 +566,7 @@ def main():
     tesla = teslapy.Tesla(args.email, retry=2, timeout=args.timeout)
     # Tesla requires TLS 1.3 as of June 12, 2026 (ref: TeslaPy PR #176)
     import ssl
+    import certifi
     from requests.adapters import HTTPAdapter
 
     class TLSAdapter(HTTPAdapter):
@@ -573,6 +574,7 @@ def main():
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ctx.minimum_version = ssl.TLSVersion.TLSv1_3
             ctx.maximum_version = ssl.TLSVersion.TLSv1_3
+            ctx.load_verify_locations(certifi.where())
             return super().init_poolmanager(connections, maxsize, block, ssl_context=ctx)
 
     tesla.mount('https://', TLSAdapter(max_retries=2))
